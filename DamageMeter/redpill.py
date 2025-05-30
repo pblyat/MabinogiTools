@@ -7,7 +7,6 @@ from tkinter import font
 from datetime import datetime
 from scapy.all import sniff, IP, Raw, get_if_addr, conf
 import re
-from textwrap import wrap
 import struct
 import threading
 import queue
@@ -32,106 +31,20 @@ joblist = [ # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필
     'MeleeDefaultAttack',
     'FireMage_',
     'Idle',
-    'Elemental_Common_',
+    'Elemental_',
     'GreatSwordWarrior_',
     'Arbalist_',
     'ChargingFist_',
-    'Fighter_ThrustKick',
+    'Fighter_',
     'HighMage_',
     'IceMage_',
     'SwordMaster_',
     'NoviceWarrior_',
     'ExpertWarrior_',
-    'Monk_Skill_',
+    'Monk_',
     'LongBowMan_',
     'HighArcher_',
-]
-
-skilllist = [ # 인식 가능한 스킬 리스트, 직업별로 추가 필요, 오작동이 많을 경우에만 사용
-    'RangeDefaultAttack_1',
-    'RangeDefaultAttack_2',
-    'RangeDefaultAttack_3',
-    'RangeDefaultAttack_4',
-    'RangeDefaultAttack_5',
-    'MeleeDefaultAttack_1',
-    'MeleeDefaultAttack_2',
-    'MeleeDefaultAttack_3',
-    'MeleeDefaultAttack_4',
-    'MeleeDefaultAttack_5',
-    'FireMage_FireStorm',
-    'RapidFire',
-    'RapidFire_Tier2',
-    'RapidFire_Tier1A',
-    'RapidFire_Tier2A',
-    'RapidFire_Tier1B',
-    'RapidFire_Tier2B',
-    'Flashover_HitPª',
-    'FireMage_Incinerate_Casting',
-    'FireMage_Incinerate_Casting_1',
-    'FireMage_Incinerate_Casting_2',
-    'FireMage_Incinerate_Casting_3',
-    'FireMage_Incinerate_End',
-    'FireMage_Incinerate_End_1',
-    'FireMage_Incinerate_End_2',
-    'FireMage_Incinerate_End_3',
-    'Idle',
-    'Elemental_Common_Hit_Bleed',
-    'GreatSwordWarrior_Slash_Back',
-    'GreatSwordWarrior_Finish_3_End',
-    'Arbalist_MountingShock',
-    'Arbalist_GustingBolt_01_Tier1A',
-    'Arbalist_GustingBolt_01_Tier2A',
-    'Arbalist_GustingBolt_02_Tier1A',
-    'Arbalist_GustingBolt_02_Tier2A',
-    'Arbalist_GustingBolt_01',
-    'Arbalist_GustingBolt_02',
-    'Arbalist_ShockExplosion',
-    'Arbalist_ShockExplosion_Tier1A',
-    'Arbalist_ShockExplosion_Tier2A',
-    'Arbalist_SlipThrough',
-    'Arbalist_SpreadingBolt_01',
-    'ChargingFist_End_LV3',
-    'ChargingFist_End_LV2',
-    'ChargingFist_End_LV1',
-    'Fighter_ThrustKick',
-    'Fighter_BackStep',
-    'Fighter_BurstPunch_01',
-    'Fighter_BurstPunch_02',
-    'Fighter_Somersalt_01',
-    'Fighter_Somersalt_02',
-    'HighMage_Lightning_End',
-    'HighMage_Telekinesis_End',
-    'IceMage_CrystalEdge_01',
-    'IceMage_CrystalEdge_02',
-    'SwordMaster_SwordAndScabbard',
-    'SwordMaster_SwiftAttack',
-    'SwordMaster_Detection_End1',
-    'SwordMaster_Detection_End2',
-    'NoviceWarrior_RapidSlash_1',
-    'NoviceWarrior_RapidSlash_2',
-    'NoviceWarrior_RapidSlash_3',
-    'NoviceWarrior_RapidSlash_4',
-    'NoviceWarrior_RapidSlash_5',
-    'NoviceWarrior_BladeSmash_End',
-    'NoviceWarrior_ShieldBash',
-    'NoviceWarrior_DashStab_End',
-    'ExpertWarrior_BattleCry_start',
-    'Monk_Skill_SurgeOfLight_01',
-    'Monk_Skill_SurgeOfLight_02',
-    'Monk_Skill_Thunderstrike',
-    'LongBowMan_ShellBreaker',
-    'LongBowMan_HeartSeeker_End_LV1',
-    'LongBowMan_HeartSeeker_End_LV2',
-    'LongBowMan_HeartSeeker_End_LV3',
-    'LongBowMan_CrashShot',
-    'LongBowMan_FlameBarrage',
-    'LongBowMan_WingSkewer',
-    'HighArcher_MagnumShotEnd',
-    'HighArcher_SideStepRight',
-    'HighArcher_HawkShot',
-    'HighArcher_EscapeStep',
-    'HighArcher_ArrowRevolver',
-
+    'Priest_',
 ]
 
 blacklist = [
@@ -220,58 +133,49 @@ def getburn(data: bytes):
     if len(damages) > 0: return damages
     return [0]
 
-def getdamage(data: bytes, pattern):
-    damages = [['',0]]
-    for match in re.finditer(pattern, data, flags=re.DOTALL):
-        matchstart = match.end() 
-        matchend = match.end() 
-        if len(data) >= matchend + 8:
-            i = matchstart
-            while i < len(data) - 8:  # 최소 10바이트 이상 남아야 함
-                # UTF-16LE 패턴: ?? 00 ?? 00 ...
-                # 문자열 끝 찾기: ?? ?? 00 00
-                if data[i+2:i+4] == b'\x00\x00':
-                    int_candidate = data[i:i+4]  # 4바이트
-                    padding = data[i+4:i+8]
-                    
-                    # 패딩이 00 00 00 00인지 확인
-                    if padding == b'\x00\x00\x00\x00':
-                        utf_part = data[matchstart:i]  # 그 앞이 문자열
-                        try:
-                            string = utf_part.decode('utf-16le')
-                            value = int.from_bytes(int_candidate, byteorder='little')
-                            if value > 99: 
-                                damages.append([string,value])
-                                break
-                        except UnicodeDecodeError:
-                            pass  # 문자열 디코딩 실패 시 무시
-                i += 2  # UTF-16LE는 2바이트 단위로 이동
-
-            #vbytes = data[matchend:matchend+8]
-            #if vbytes[1] == 0x00 and vbytes[2] != 0x00 and vbytes[3] == 0x00 and vbytes[4] != 0x00: continue
-            #value = int.from_bytes(vbytes, byteorder='little')
-            #damages.append(value)
-    return damages
+def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
+    results = []
+    start_pos = 0
+    
+    while True:
+        pattern_index = data.find(pattern_bytes, start_pos)
+        
+        if pattern_index == -1:
+            break
+        
+        if pattern_index < 4:
+            start_pos = pattern_index + len(pattern_bytes)
+            continue
+        
+        try:
+            skill_name_length = struct.unpack('<I', data[pattern_index-4:pattern_index])[0]
+            
+            skill_name_start = pattern_index
+            skill_name_end = skill_name_start + skill_name_length
+            
+            if skill_name_end + 2 > len(data):
+                start_pos = pattern_index + len(pattern_bytes)
+                continue
+            
+            skill_name_bytes = data[skill_name_start:skill_name_end]
+            skill_name = skill_name_bytes.decode('utf-16le', errors='ignore')
+            
+            damage_bytes = data[skill_name_end:skill_name_end + 2]
+            damage = struct.unpack('<H', damage_bytes)[0]
+            
+            results.append((skill_name, damage))
+            
+            start_pos = skill_name_end + 2
+            
+        except Exception as e:
+            start_pos = pattern_index + len(pattern_bytes)
+            continue
+    
+    return results
 
 def tryprint(raw_data):
     global dmgskill
     global dmgburn
-    detec = False
-    filterdata2 = [
-        2708736,
-        2708224,
-        2572544,
-        334336,
-        2605568,
-        2624768,
-        2621440,   
-        2625024,
-        2674176,
-        2712064,
-    ]
-    
-    printint = ''
-    valsint = []
     
     if len(raw_data) < 24: return # 길이 필터링
     #if not matchdata(raw_data): return # 헤더 필터링
@@ -287,7 +191,6 @@ def tryprint(raw_data):
             printint += f"{int_val} "
             valsint.append(int_val)
     '''
-    #if valsint[2] in filterdata2: return #int 필터링
 
 
     burndamage = getburn(raw_data) # 지속 데미지 출력
@@ -298,21 +201,11 @@ def tryprint(raw_data):
 
     for x in joblist: # 데미지 출력, 직업 인식
         if toutf16le(x) in raw_data: 
-            detec = True
-            damages = getdamage(raw_data, toutf16le(x))
-            for y in damages:
-                if y[1] > 9:
-                    dmgskill.append(y[1])
-                    print(x + " : " + str(y[1]))
-    return
-
-    for x in skilllist: # 데미지 출력, 스킬 인식, 오작동이 많을 경우에만 사용
-        if toutf16le(x) in raw_data: 
-            detec = True
-            damages = getdamage(raw_data, toutf16le(x))
-            for y in damages:
-                if y[1] > 9:
-                    print(y[0] + " : " + str(y[1]))
+            damages = get_damages(raw_data, toutf16le(x))
+            for skill_name, damage in damages:
+                if damage > 9:
+                    dmgskill.append(damage)
+                    print(f"{skill_name} : {damage}")
     return
 
 class DamageTrackerApp: #챗지피티 최고
