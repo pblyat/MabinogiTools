@@ -59,24 +59,40 @@ def findpattern(data: bytes, pattern: bytes) -> list:
         i += 1
     return positions
 
+def finddamage(data: bytes):
+    target = int.from_bytes(data[8:12], byteorder='little')
+    skilllen = int.from_bytes(data[16:20], byteorder='little')
+    if skilllen > 99 or skilllen < 2: return
+    skillname = data[20:20 + skilllen].decode('utf-16le')
+    damage = int.from_bytes(data[20 + skilllen:20 + skilllen + 4], byteorder='little')
+    if damage < 2 or damage > 100000000: return
+    return [damage, target, skillname]
+
 def get_damages(data: bytes):
     damages = []
     spoints = findpattern(data, dmgtype)
     for spoint in spoints:
         dtype = data[spoint + 4]
         if dtype == 0: continue
+        if data[spoint + 8] == 1:
+            try:
+                enclen = int.from_bytes(data[spoint + 4:spoint + 8], byteorder='little')
+                encdata = data[spoint + 9:spoint + 9 + enclen]
+                decdata = brotli.decompress(encdata)
+                dmgs = finddamage(decdata)
+                if dmgs: damages.append([dmgs[0], dmgs[1], dtype , dmgs[2]])
+            except Exception as e:
+                print(f"Decompression error")
+
         if dtype == 67: #지속피해, 0x43
             target = int.from_bytes(data[spoint+17:spoint+21], byteorder='little')
             damage = int.from_bytes(data[spoint+29:spoint+33], byteorder='little')
             damages.append([damage,target,dtype,'DOT'])
         else:
-            target = int.from_bytes(data[spoint+17:spoint+21], byteorder='little')
-            skilllen = int.from_bytes(data[spoint + 25:spoint + 29], byteorder='little')
-            if skilllen > 99 or skilllen < 2: continue
-            skillname = data[spoint + 29:spoint + 29 + skilllen].decode('utf-16le')
-            damage = int.from_bytes(data[spoint + 29 + skilllen:spoint + 29 + skilllen + 4], byteorder='little')
-            if damage < 2 or damage > 100000000: continue
-            damages.append([damage, target, dtype , skillname])
+            datalen = int.from_bytes(data[spoint + 4:spoint + 8], byteorder='little')
+            slcdata = data[spoint + 9:spoint + 9 + datalen]
+            dmgs = finddamage(slcdata)
+            if dmgs: damages.append([dmgs[0], dmgs[1], dtype , dmgs[2]])
     return damages
 
 def extractpkt(data: bytes):
@@ -116,16 +132,6 @@ def tryprint(raw_data):
         else:
             dmgskill.append([damage, target])
         print(f"target : {target} / {skillname} / dmg : {damage}")
-
-    extract_list = extractpkt(raw_data)
-    for data in extract_list:
-        bdamages = get_damages(data)
-        for damage, target, dtype, skillname in bdamages:
-            if dtype == 67:
-                dmgburn.append([damage, target])
-            else:
-                dmgskill.append([damage, target])
-            print(f"target : {target} / {skillname} / dmg : {damage}")
 
 
 class DamageTrackerApp: #챗지피티 최고
